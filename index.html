@@ -118,8 +118,11 @@
                                 <div class="input-group">
                                     <textarea class="form-control" id="text" rows="5" placeholder="请输入要转换的文本..."></textarea>
                                     <div class="input-group-append">
-                                        <button class="btn btn-outline-primary" id="translateBtn" type="button">
+                                        <button id="translateBtn" class="btn btn-info">
                                             <i class="fas fa-language"></i> 翻译
+                                        </button>
+                                        <button id="speakTranslatedBtn" class="btn btn-success" disabled>
+                                            <i class="fas fa-volume-up"></i> 朗读翻译结果
                                         </button>
                                     </div>
                                 </div>
@@ -149,6 +152,16 @@
 
                         <div class="mt-4 text-center" id="loading" style="display: none;">
                             <i class="fas fa-spinner fa-spin"></i> 正在生成语音，请稍候...
+                        </div>
+
+                        <div class="mt-2">
+                            <select id="translateLanguage" class="form-control" style="display: none;">
+                                <option value="">选择目标语言...</option>
+                            </select>
+                        </div>
+
+                        <div class="mt-2">
+                            <textarea id="translatedText" class="form-control" rows="5" readonly style="display: none;" placeholder="翻译结果将在这里显示..."></textarea>
                         </div>
                     </div>
                 </div>
