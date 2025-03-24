@@ -9,6 +9,10 @@ const API_CONFIG = {
         url: 'https://1220.tts-api.zwei.de.eu.org/tts',
         authToken: '76a75279-2ffa-4c3d-8db8-7b47252aa41c'
     },
+    'otts-api': {
+        url: 'https://1220.otts-api.zwei.de.eu.org/tts',
+        authToken: '76a75279-2ffa-4c3d-8db8-7b47252aa41c'
+    },
     'deno-api': {
         url: 'https://deno-tts.api.zwei.de.eu.org/tts'
     }
@@ -69,6 +73,7 @@ $(document).ready(function() {
             
             const tips = {
                 'workers-api': '使用 Workers API，每天限制 100000 次请求',
+                'otts-api': '使用 OTTS API，支持语速语调调整，基于 OpenAI TTS',
                 'deno-api': '使用 Deno API，基于 Lobe-TTS，暂不支持语速语调调整'
             };
             $('#apiTips').text(tips[apiName] || '');
@@ -258,7 +263,11 @@ async function makeRequest(url, isPreview, text, isDenoApi, requestId = '') {
         
         // 如果是 workers-api，添加认证头
         if (apiName === 'workers-api') {
-            headers['x-auth-token'] = API_CONFIG[apiName].authToken;
+            headers['Authorization'] = `Bearer ${API_CONFIG[apiName].authToken}`;
+        }
+        // 如果是 otts-api，添加认证头
+        else if (apiName === 'otts-api') {
+            headers['Authorization'] = `Bearer ${API_CONFIG[apiName].authToken}`;
         }
 
         const response = await fetch(url, { 
