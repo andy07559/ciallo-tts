@@ -7,7 +7,7 @@ let isGenerating = false;
 const API_CONFIG = {
     'workers-api': {
         url: 'https://1220.tts-api.zwei.de.eu.org/tts',
-        authToken: 'b1bb19a5-4be1-4018-8120-6ef3419c0e4c'
+        authToken: '76a75279-2ffa-4c3d-8db8-7b47252aa41c'
     },
     'deno-api': {
         url: 'https://deno-tts.api.zwei.de.eu.org/tts'
