@@ -3,6 +3,7 @@ let lastRequestTime = 0;
 let currentAudioURL = null;
 let requestCounter = 0;
 let isGenerating = false;
+let isTranslating = false;
 
 const API_CONFIG = {
     'workers-api': {
@@ -127,6 +128,27 @@ $(document).ready(function() {
             if (value > 100) $(this).val(100);
             if (value < 0.01 && value !== '') $(this).val(0.01);
         });
+
+        // 添加翻译按钮事件监听
+        $('#translateBtn').on('click', function() {
+            const text = $('#text').val().trim();
+            const targetLang = $('#targetLang').val();
+            translateText(text, targetLang);
+        });
+
+        // 添加朗读翻译结果按钮事件监听
+        $('#speakTranslatedBtn').on('click', function() {
+            const translatedText = $('#translatedText').val().trim();
+            if (!translatedText) {
+                showError('请先翻译文本');
+                return;
+            }
+            $('#text').val(translatedText);
+            generateVoice(false);
+        });
+
+        // 初始化翻译结果朗读按钮状态
+        $('#speakTranslatedBtn').prop('disabled', true);
     });
 });
 
@@ -261,7 +283,10 @@ async function makeRequest(url, isPreview, text, isDenoApi, requestId = '') {
             headers['x-auth-token'] = API_CONFIG[apiName].authToken;
         }
 
-        const response = await fetch(url, { 
+        // 处理 URL 前缀 "@"
+        const processedUrl = url.startsWith('@') ? url.substring(1) : url;
+
+        const response = await fetch(processedUrl, { 
             method: 'POST',
             headers: headers,
             body: JSON.stringify({
@@ -758,4 +783,58 @@ function showWarning(message) {
 
 function showInfo(message) {
     showMessage(message, 'info');
+}
+
+async function translateText(text, targetLang) {
+    if (!text.trim()) {
+        showError('请输入要翻译的文本');
+        return;
+    }
+
+    if (isTranslating) {
+        showError('请等待当前翻译完成');
+        return;
+    }
+
+    isTranslating = true;
+    $('#translateBtn').prop('disabled', true);
+    showLoading('正在翻译...');
+
+    try {
+        // 使用 Gemini API
+        const response = await fetch('https://ge.139.ink/v1beta/models/gemini-2.0-flash:generateContent', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': 'AIzaSyC0LhCkD0TAy9sjCxaPFoCd93QkcbWedLo'
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: `请将以下文本翻译成${targetLang}：\n${text}`
+                    }]
+                }]
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`翻译服务响应错误: ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
+            const translatedText = data.candidates[0].content.parts[0].text;
+            $('#translatedText').val(translatedText);
+            $('#speakTranslatedBtn').prop('disabled', false);
+        } else {
+            throw new Error('翻译结果格式错误');
+        }
+    } catch (error) {
+        console.error('翻译错误:', error);
+        showError('翻译失败：' + error.message);
+    } finally {
+        hideLoading();
+        isTranslating = false;
+        $('#translateBtn').prop('disabled', false);
+    }
 }
