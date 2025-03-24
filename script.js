@@ -950,9 +950,39 @@ document.getElementById('translateBtn').addEventListener('click', async () => {
         return;
     }
 
-    const targetLanguage = document.getElementById('translateLanguage').value;
-    if (!targetLanguage) {
-        showError('请选择目标语言');
+    // 显示翻译语言选择下拉框
+    const translateLanguageGroup = document.getElementById('translateLanguageGroup');
+    translateLanguageGroup.style.display = 'block';
+    
+    // 如果已经选择了语言，直接进行翻译
+    const translateLanguageSelect = document.getElementById('translateLanguage');
+    if (translateLanguageSelect.value) {
+        try {
+            const translateBtn = document.getElementById('translateBtn');
+            translateBtn.disabled = true;
+            translateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 翻译中...';
+            
+            await translateText(text, translateLanguageSelect.value);
+            
+            // 显示翻译结果区域
+            document.getElementById('translatedTextGroup').style.display = 'block';
+            document.getElementById('speakTranslatedBtn').disabled = false;
+        } catch (error) {
+            console.error('翻译错误:', error);
+            showError('翻译失败，请稍后重试');
+        } finally {
+            const translateBtn = document.getElementById('translateBtn');
+            translateBtn.disabled = false;
+            translateBtn.innerHTML = '<i class="fas fa-language"></i> 翻译';
+        }
+    }
+});
+
+// 添加翻译语言选择变化事件监听
+document.getElementById('translateLanguage').addEventListener('change', async function() {
+    const text = document.getElementById('text').value.trim();
+    if (!text) {
+        showError('请输入要翻译的文本');
         return;
     }
 
@@ -961,11 +991,10 @@ document.getElementById('translateBtn').addEventListener('click', async () => {
         translateBtn.disabled = true;
         translateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 翻译中...';
         
-        await translateText(text, targetLanguage);
+        await translateText(text, this.value);
         
-        // 显示翻译语言选择和结果区域
-        document.getElementById('translateLanguage').style.display = 'block';
-        document.getElementById('translatedText').style.display = 'block';
+        // 显示翻译结果区域
+        document.getElementById('translatedTextGroup').style.display = 'block';
         document.getElementById('speakTranslatedBtn').disabled = false;
     } catch (error) {
         console.error('翻译错误:', error);
@@ -977,13 +1006,23 @@ document.getElementById('translateBtn').addEventListener('click', async () => {
     }
 });
 
-// 添加朗读翻译结果按钮事件监听
+// 修改朗读翻译结果按钮事件监听
 document.getElementById('speakTranslatedBtn').addEventListener('click', function() {
     const translatedText = document.getElementById('translatedText').value.trim();
     if (!translatedText) {
         showError('请先翻译文本');
         return;
     }
+    
+    // 创建一个临时文本区域来存储原始文本
+    const originalText = document.getElementById('text').value;
+    
+    // 设置翻译后的文本并生成语音
     document.getElementById('text').value = translatedText;
     generateVoice(false);
+    
+    // 生成语音后恢复原始文本
+    setTimeout(() => {
+        document.getElementById('text').value = originalText;
+    }, 1000);
 });
