@@ -7,19 +7,12 @@ let isGenerating = false;
 const API_CONFIG = {
     'workers-api': {
         url: 'https://1220.tts-api.zwei.de.eu.org/tts',
-        authToken: 'tts-api-v2-free'
-    },
-    'otts-api': {
-        url: 'https://1220.otts-api.zwei.de.eu.org/tts',
-        authToken: 'tts-api-v2-free'
+        authToken: 'your-key'
     },
     'deno-api': {
         url: 'https://deno-tts.api.zwei.de.eu.org/tts'
     }
 };
-
-// 默认使用哪个API
-const DEFAULT_API = 'deno-api';
 
 function loadSpeakers() {
     return $.ajax({
@@ -28,9 +21,7 @@ function loadSpeakers() {
         dataType: 'json',
         success: function(data) {
             apiConfig = data;
-            // 设置默认API
-            $('#api').val(DEFAULT_API);
-            updateSpeakerOptions(DEFAULT_API);
+            updateSpeakerOptions('workers-api');
         },
         error: function(jqXHR, textStatus, errorThrown) {
             console.error(`加载讲述者失败：${textStatus} - ${errorThrown}`);
@@ -78,7 +69,6 @@ $(document).ready(function() {
             
             const tips = {
                 'workers-api': '使用 Workers API，每天限制 100000 次请求',
-                'otts-api': '使用 OTTS API，支持语速语调调整，基于 OpenAI TTS',
                 'deno-api': '使用 Deno API，基于 Lobe-TTS，暂不支持语速语调调整'
             };
             $('#apiTips').text(tips[apiName] || '');
@@ -150,21 +140,7 @@ function canMakeRequest() {
 
 async function generateVoice(isPreview) {
     const apiName = $('#api').val();
-    
-    // 检查API是否存在
-    if (!API_CONFIG[apiName]) {
-        showError(`所选API配置不存在: ${apiName}`);
-        return;
-    }
-    
     const apiUrl = API_CONFIG[apiName].url;
-    
-    // 验证URL是否存在
-    if (!apiUrl) {
-        showError(`API URL未配置: ${apiName}`);
-        return;
-    }
-    
     const text = $('#text').val().trim();
     
     if (!text) {
@@ -172,51 +148,76 @@ async function generateVoice(isPreview) {
         return;
     }
 
+    if (isPreview) {
+        const previewText = text.substring(0, 20);
+        try {
+            const blob = await makeRequest(apiUrl, true, previewText, apiName === 'deno-api');
+            if (blob) {
+                if (currentAudioURL) {
+                    URL.revokeObjectURL(currentAudioURL);
+                }
+                currentAudioURL = URL.createObjectURL(blob);
+                $('#result').show();
+                $('#audio').attr('src', currentAudioURL);
+                $('#download').attr('href', currentAudioURL);
+            }
+        } catch (error) {
+            showError('试听失败：' + error.message);
+        }
+        return;
+    }
+
+    if (!canMakeRequest()) {
+        return;
+    }
+
+    // 设置生成状态
     isGenerating = true;
-    $('#generateButton, #previewButton').prop('disabled', true);
-    showMessage('正在生成语音，请稍候...', 'info');
+    $('#generateButton').prop('disabled', true);
+    $('#previewButton').prop('disabled', true);
+
+    // 处理长文本
+    const segments = splitText(text);
+    requestCounter++;
+    const currentRequestId = requestCounter;
     
-    try {
-        // 记录请求时间
-        lastRequestTime = Date.now();
-        
-        // 如果是预览，限制文本长度
-        const previewText = isPreview ? text.substring(0, 300) : text;
-        
-        if (isPreview && text.length > 300) {
-            showMessage('预览仅生成前300个字符的语音', 'warning');
-        }
-        
-        // 文本长度检查
-        if (previewText.length > 50000) {
-            showError('文本太长，请减少字符数量');
-            return;
-        }
-        
-        const textToProcess = isPreview ? previewText : text;
-        
-        // 生成音频Blob
-        const audioBlob = await makeRequest(apiName, apiUrl, textToProcess, isPreview);
-        
-        if (!isPreview) {
-            // 添加到历史记录
-            addHistoryItem(
-                new Date().toLocaleString(),
-                $('select#speaker option:selected').text(),
-                textToProcess,
-                audioBlob,
-                `#${++requestCounter}`
-            );
-        }
-        
-        showMessage(isPreview ? '预览生成成功' : '语音生成成功', 'success');
-        
-    } catch (error) {
-        console.error(error);
-        showError(`语音生成失败: ${error.message}`);
-    } finally {
-        isGenerating = false;
-        $('#generateButton, #previewButton').prop('disabled', false);
+    if (segments.length > 1) {
+        showLoading(`正在生成#${currentRequestId}请求的 1/${segments.length} 段语音...`);
+        generateVoiceForLongText(segments, currentRequestId).then(finalBlob => {
+            if (finalBlob) {
+                if (currentAudioURL) {
+                    URL.revokeObjectURL(currentAudioURL);
+                }
+                currentAudioURL = URL.createObjectURL(finalBlob);
+                $('#result').show();
+                $('#audio').attr('src', currentAudioURL);
+                $('#download').attr('href', currentAudioURL);
+            }
+        }).finally(() => {
+            hideLoading();
+            isGenerating = false;  // 重置生成状态
+            $('#generateButton').prop('disabled', false);
+            $('#previewButton').prop('disabled', false);
+        });
+    } else {
+        showLoading(`正在生成#${currentRequestId}请求的语音...`);
+        const requestInfo = `#${currentRequestId}(1/1)`;
+        makeRequest(apiUrl, false, text, apiName === 'deno-api', requestInfo)
+            .then(blob => {
+                if (blob) {
+                    const timestamp = new Date().toLocaleTimeString();
+                    const speaker = $('#speaker option:selected').text();
+                    const cleanText = text.replace(/<break\s+time=["'](\d+(?:\.\d+)?[ms]s?)["']\s*\/>/g, '');
+                    const shortenedText = cleanText.length > 7 ? cleanText.substring(0, 7) + '...' : cleanText;
+                    addHistoryItem(timestamp, speaker, shortenedText, blob, requestInfo);
+                }
+            })
+            .finally(() => {
+                hideLoading();
+                isGenerating = false;  // 重置生成状态
+                $('#generateButton').prop('disabled', false);
+                $('#previewButton').prop('disabled', false);
+            });
     }
 }
 
@@ -244,21 +245,23 @@ function escapeXml(text) {
     return tempText;
 }
 
-async function makeRequest(apiName, apiUrl, text, isPreview, requestId = '') {
+async function makeRequest(url, isPreview, text, isDenoApi, requestId = '') {
     try {
         // 转义文本中的特殊字符，但保护 SSML 标签
         const escapedText = escapeXml(text);
         
+        const apiName = $('#api').val();
         const headers = {
             'Accept': 'audio/mpeg',
             'Content-Type': 'application/json'
         };
-
-        if (apiName === 'workers-api' || apiName === 'otts-api') {
-            headers['Authorization'] = `Bearer ${API_CONFIG[apiName].authToken}`;
+        
+        // 如果是 workers-api，添加认证头
+        if (apiName === 'workers-api') {
+            headers['x-auth-token'] = API_CONFIG[apiName].authToken;
         }
 
-        const response = await fetch(apiUrl, { 
+        const response = await fetch(url, { 
             method: 'POST',
             headers: headers,
             body: JSON.stringify({
@@ -658,49 +661,91 @@ function updateLoadingProgress(progress, message) {
 }
 
 async function generateVoiceForLongText(segments, currentRequestId) {
-    const audioBlobs = [];
-    const totalSegments = segments.length;
+    const results = [];
     const apiName = $('#api').val();
     const apiUrl = API_CONFIG[apiName].url;
+    const totalSegments = segments.length;
     
+    // 获取原始文本并清理 SSML 标签
+    const originalText = $('#text').val();
+    const cleanText = originalText.replace(/<break\s+time=["'](\d+(?:\.\d+)?[ms]s?)["']\s*\/>/g, '');
+    const shortenedText = cleanText.length > 7 ? cleanText.substring(0, 7) + '...' : cleanText;
+    
+    showLoading('');
+    
+    let hasSuccessfulSegment = false;
+    const MAX_RETRIES = 3;
+
     for (let i = 0; i < segments.length; i++) {
-        showLoading(`正在生成#${currentRequestId}请求的 ${i + 1}/${totalSegments} 段语音...`);
-        try {
-            const blob = await makeRequest(
-                apiName, 
-                apiUrl, 
-                segments[i], 
-                false, 
-                `#${currentRequestId}(${i + 1}/${totalSegments})`
-            );
-            audioBlobs.push(blob);
-            
-            // 添加到历史记录
-            const timestamp = new Date().toLocaleTimeString();
-            const speaker = $('#speaker option:selected').text();
-            const cleanText = segments[i].replace(/<break\s+time=["'](\d+(?:\.\d+)?[ms]s?)["']\s*\/>/g, '');
-            const shortenedText = cleanText.length > 30 ? cleanText.substring(0, 30) + '...' : cleanText;
-            addHistoryItem(timestamp, speaker, shortenedText, blob, `#${currentRequestId}(${i + 1}/${totalSegments})`);
-            
-        } catch (error) {
-            console.error(`第 ${i + 1} 段语音生成失败:`, error);
-            showError(`第 ${i + 1} 段语音生成失败: ${error.message}`);
+        let retryCount = 0;
+        let success = false;
+        let lastError = null;
+
+        while (retryCount < MAX_RETRIES && !success) {
+            try {
+                const progress = ((i + 1) / totalSegments * 100).toFixed(1);
+                const retryInfo = retryCount > 0 ? `(重试 ${retryCount}/${MAX_RETRIES})` : '';
+                updateLoadingProgress(
+                    progress, 
+                    `正在生成#${currentRequestId}请求的 ${i + 1}/${totalSegments} 段语音${retryInfo}...`
+                );
+                
+                const blob = await makeRequest(
+                    apiUrl, 
+                    false, 
+                    segments[i], 
+                    apiName === 'deno-api', 
+                    `#${currentRequestId}(${i + 1}/${totalSegments})`
+                );
+                
+                if (blob) {
+                    hasSuccessfulSegment = true;
+                    success = true;
+                    results.push(blob);
+                    const timestamp = new Date().toLocaleTimeString();
+                    const speaker = $('#speaker option:selected').text();
+                    // 清理当前段的 SSML 标签
+                    const cleanSegmentText = segments[i].replace(/<break\s+time=["'](\d+(?:\.\d+)?[ms]s?)["']\s*\/>/g, '');
+                    const shortenedSegmentText = cleanSegmentText.length > 7 ? cleanSegmentText.substring(0, 7) + '...' : cleanSegmentText;
+                    const requestInfo = `#${currentRequestId}(${i + 1}/${totalSegments})`;
+                    addHistoryItem(timestamp, speaker, shortenedSegmentText, blob, requestInfo);
+                }
+            } catch (error) {
+                lastError = error;
+                retryCount++;
+                
+                if (retryCount < MAX_RETRIES) {
+                    console.error(`分段 ${i + 1} 生成失败 (重试 ${retryCount}/${MAX_RETRIES}):`, error);
+                    const waitTime = 3000 + (retryCount * 2000);
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                } else {
+                    showError(`第 ${i + 1}/${totalSegments} 段生成失败：${error.message}`);
+                }
+            }
+        }
+
+        if (!success) {
+            console.error(`分段 ${i + 1} 在 ${MAX_RETRIES} 次尝试后仍然失败:`, lastError);
+        }
+
+        if (success && i < segments.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
         }
     }
-    
-    if (audioBlobs.length === 0) {
-        showError('所有语音段生成失败');
-        return null;
+
+    hideLoading();
+
+    if (results.length > 0) {
+        const finalBlob = new Blob(results, { type: 'audio/mpeg' });
+        const timestamp = new Date().toLocaleTimeString();
+        const speaker = $('#speaker option:selected').text();
+        // 使用之前清理过的文本
+        const mergeRequestInfo = `#${currentRequestId}(合并)`;
+        addHistoryItem(timestamp, speaker, shortenedText, finalBlob, mergeRequestInfo);
+        return finalBlob;
     }
-    
-    try {
-        // 合并音频Blob
-        return await mergeAudioBlobs(audioBlobs);
-    } catch (error) {
-        console.error('合并音频失败:', error);
-        showError(`合并音频失败: ${error.message}`);
-        return audioBlobs[0]; // 返回第一个音频块作为备用
-    }
+
+    throw new Error('所有片段生成失败');
 }
 
 // 在 body 末尾添加 toast 容器
@@ -713,18 +758,4 @@ function showWarning(message) {
 
 function showInfo(message) {
     showMessage(message, 'info');
-}
-
-// 合并多个音频Blob为一个
-async function mergeAudioBlobs(blobs) {
-    if (blobs.length === 0) {
-        throw new Error('没有音频数据可合并');
-    }
-    
-    if (blobs.length === 1) {
-        return blobs[0];
-    }
-    
-    // 直接合并Blob，假设它们都是兼容的格式（如MP3）
-    return new Blob(blobs, { type: 'audio/mpeg' });
 }
