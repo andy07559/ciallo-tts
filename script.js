@@ -261,12 +261,7 @@ async function makeRequest(url, isPreview, text, isDenoApi, requestId = '') {
             'Content-Type': 'application/json'
         };
         
-        // 如果是 workers-api，添加认证头
-        if (apiName === 'workers-api') {
-            headers['Authorization'] = `Bearer ${API_CONFIG[apiName].authToken}`;
-        }
-        // 如果是 otts-api，添加认证头
-        else if (apiName === 'otts-api') {
+        if (apiName === 'workers-api' || apiName === 'otts-api') {
             headers['Authorization'] = `Bearer ${API_CONFIG[apiName].authToken}`;
         }
 
