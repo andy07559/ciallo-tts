@@ -838,3 +838,152 @@ async function translateText(text, targetLang) {
         $('#translateBtn').prop('disabled', false);
     }
 }
+
+// 添加翻译语言选择下拉框
+const translateLanguageSelect = document.createElement('select');
+translateLanguageSelect.className = 'form-control mt-2';
+translateLanguageSelect.id = 'translateLanguage';
+translateLanguageSelect.innerHTML = '<option value="">选择目标语言...</option>';
+translateLanguageSelect.style.display = 'none';
+textInput.parentNode.insertBefore(translateLanguageSelect, textInput.nextSibling);
+
+// 添加翻译结果显示区域
+const translatedTextArea = document.createElement('textarea');
+translatedTextArea.className = 'form-control mt-2';
+translatedTextArea.id = 'translatedText';
+translatedTextArea.rows = 5;
+translatedTextArea.readOnly = true;
+translatedTextArea.placeholder = '翻译结果将在这里显示...';
+translatedTextArea.style.display = 'none';
+textInput.parentNode.insertBefore(translatedTextArea, translateLanguageSelect.nextSibling);
+
+// 更新翻译语言选项
+function updateTranslateLanguages() {
+    const speakerSelect = document.getElementById('speaker');
+    const translateLanguageSelect = document.getElementById('translateLanguage');
+    const currentApi = document.getElementById('api').value;
+    
+    // 清空现有选项
+    translateLanguageSelect.innerHTML = '<option value="">选择目标语言...</option>';
+    
+    // 根据当前选择的API和语音选项更新翻译语言
+    if (currentApi === 'deno-api') {
+        // Deno API的语言选项
+        const denoLanguages = {
+            'en-US': '英语',
+            'fr-FR': '法语',
+            'de-DE': '德语',
+            'es-ES': '西班牙语',
+            'ar-SA': '阿拉伯语',
+            'zh-CN': '中文',
+            'ja-JP': '日语',
+            'ko-KR': '朝鲜语',
+            'yue-CN': '粤语',
+            'vi-VN': '越南语'
+        };
+        
+        // 只添加当前可用的语音对应的语言
+        for (const [code, name] of Object.entries(denoLanguages)) {
+            const option = document.createElement('option');
+            option.value = code;
+            option.textContent = name;
+            translateLanguageSelect.appendChild(option);
+        }
+    } else if (currentApi === 'workers-api') {
+        // Workers API的语言选项
+        const workersLanguages = {
+            'en-US': '英语',
+            'fr-FR': '法语',
+            'de-DE': '德语',
+            'es-ES': '西班牙语',
+            'ar-SA': '阿拉伯语',
+            'zh-CN': '中文',
+            'ja-JP': '日语',
+            'ko-KR': '朝鲜语',
+            'yue-CN': '粤语',
+            'vi-VN': '越南语'
+        };
+        
+        // 只添加当前可用的语音对应的语言
+        for (const [code, name] of Object.entries(workersLanguages)) {
+            const option = document.createElement('option');
+            option.value = code;
+            option.textContent = name;
+            translateLanguageSelect.appendChild(option);
+        }
+    } else if (currentApi === 'otts-api') {
+        // OTTS API的语言选项
+        const ottsLanguages = {
+            'en-US': '英语',
+            'fr-FR': '法语',
+            'de-DE': '德语',
+            'es-ES': '西班牙语',
+            'ar-SA': '阿拉伯语',
+            'zh-CN': '中文',
+            'ja-JP': '日语',
+            'ko-KR': '朝鲜语',
+            'yue-CN': '粤语',
+            'vi-VN': '越南语'
+        };
+        
+        // 只添加当前可用的语音对应的语言
+        for (const [code, name] of Object.entries(ottsLanguages)) {
+            const option = document.createElement('option');
+            option.value = code;
+            option.textContent = name;
+            translateLanguageSelect.appendChild(option);
+        }
+    }
+}
+
+// 监听API选择变化
+document.getElementById('api').addEventListener('change', updateTranslateLanguages);
+
+// 初始化翻译语言选项
+updateTranslateLanguages();
+
+// 修改翻译按钮点击事件
+document.getElementById('translateBtn').addEventListener('click', async () => {
+    const text = document.getElementById('text').value.trim();
+    if (!text) {
+        showError('请输入要翻译的文本');
+        return;
+    }
+
+    const targetLanguage = document.getElementById('translateLanguage').value;
+    if (!targetLanguage) {
+        showError('请选择目标语言');
+        return;
+    }
+
+    try {
+        const translateBtn = document.getElementById('translateBtn');
+        translateBtn.disabled = true;
+        translateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 翻译中...';
+        
+        await translateText(text, targetLanguage);
+        
+        // 显示翻译语言选择和结果区域
+        document.getElementById('translateLanguage').style.display = 'block';
+        document.getElementById('translatedText').style.display = 'block';
+        document.getElementById('speakTranslatedBtn').disabled = false;
+    } catch (error) {
+        console.error('翻译错误:', error);
+        showError('翻译失败，请稍后重试');
+    } finally {
+        const translateBtn = document.getElementById('translateBtn');
+        translateBtn.disabled = false;
+        translateBtn.innerHTML = '<i class="fas fa-language"></i> 翻译';
+    }
+});
+
+// 添加朗读翻译结果按钮事件监听
+document.getElementById('speakTranslatedBtn').addEventListener('click', function() {
+    const translatedText = document.getElementById('translatedText').value.trim();
+    if (!translatedText) {
+        showError('请先翻译文本');
+        return;
+    }
+    document.getElementById('text').value = translatedText;
+    generateVoice(false);
+});
