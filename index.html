@@ -85,12 +85,12 @@
                     <div class="card-body">
                         <form id="text2voice-form">
                             <div class="form-row">
-                                <div class="form-group col-md-6">
-                                    <label for="api">选择API：</label>
-                                    <select class="form-control" id="api" required>
+                                <div class="form-group mb-3">
+                                    <label for="api">API 服务器</label>
+                                    <select class="form-select" id="api">
+                                        <option value="deno-api" selected>Deno API</option>
                                         <option value="workers-api">Workers API</option>
-                                        <option value="otts-api">OTTS API</option>
-                                        <option value="deno-api">Deno API</option>
+                                        <option value="otts-api">OTTS API (OpenAI TTS)</option>
                                     </select>
                                     <small id="apiTips" class="form-text text-muted"></small>
                                 </div>
